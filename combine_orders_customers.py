@@ -3,11 +3,11 @@
 #
 # Streamlit app that:
 # 1. Lets you upload an **Orders** CSV and a **Customers** CSV.
-# 2. Flattens multi‑line‑item orders into a single "Line items" column.
-# 3. Appends the matching customer record (by e‑mail, case‑insensitive) to each
+# 2. Flattens multi-line-item orders into a single "Line items" column.
+# 3. Appends the matching customer record (by e-mail, case-insensitive) to each
 #    order row.
 # 4. Provides three downloadable report types:
-#       • Combined Order + Customer CSV  (column‑picker)
+#       • Combined Order + Customer CSV  (column-picker)
 #       • Average Lifetime Value (LTV)   (existing)
 #       • Purchases report               (NEW)
 
@@ -52,7 +52,7 @@ def _money_to_float(val) -> float:
 
 
 def _parse_date_ranges(text: str) -> List[Tuple[date, date]]:
-    """Return list[(start, end)] parsed from 'YYYY‑MM‑DD to YYYY‑MM‑DD' chunks."""
+    """Return list[(start, end)] parsed from 'YYYY-MM-DD to YYYY-MM-DD' chunks."""
     ranges: List[Tuple[date, date]] = []
     for chunk in (text or "").split(";"):
         m = re.match(r"\s*(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})\s*", chunk)
@@ -143,12 +143,8 @@ def combine(
 
     return merged
 
-
 # ─────────────────────── LTV report generator ───────────────────────────────
-# (unchanged from previous version)
-
 def generate_ltv_report(df_orders: pd.DataFrame, filters: Dict) -> Tuple[pd.DataFrame, Dict]:
-    #  … existing logic preserved … 
     df = df_orders.copy()
 
     # order‑level pre‑filter (date range)
@@ -174,14 +170,20 @@ def generate_ltv_report(df_orders: pd.DataFrame, filters: Dict) -> Tuple[pd.Data
         inc_tags = [t.lower() for t in filters["tag_includes"] if t]
         exc_tags = [t.lower() for t in filters["tag_excludes"] if t]
         if inc_tags:
-            df = df[df[tag_col].str.lower().fillna("").apply(lambda x: any(t in x for t in inc_tags))]
+            df = df[
+                df[tag_col].str.lower().fillna("").apply(lambda x: any(t in x for t in inc_tags))
+            ]
         if exc_tags:
-            df = df[~df[tag_col].str.lower().fillna("").apply(lambda x: any(t in x for t in exc_tags))]
+            df = df[
+                ~df[tag_col].str.lower().fillna("").apply(lambda x: any(t in x for t in exc_tags))
+            ]
 
     # line‑item exclusion
     li_exc = [t.lower() for t in filters["lineitem_excludes"] if t]
     if li_exc and "Line items" in df.columns:
-        df = df[~df["Line items"].str.lower().fillna("").apply(lambda x: any(t in x for t in li_exc))]
+        df = df[
+            ~df["Line items"].str.lower().fillna("").apply(lambda x: any(t in x for t in li_exc))
+        ]
 
     # money helpers
     df["_Subtotal_f"] = df["Subtotal"].apply(_money_to_float)
@@ -314,6 +316,7 @@ def generate_purchases_report(df_orders: pd.DataFrame, f: Dict) -> Tuple[pd.Data
     return report, summary
 
 
+
 # ─────────────────────────── UI ─────────────────────────────────────────────
 st.set_page_config(page_title="YES Society Order Reports", layout="wide")
 
@@ -332,64 +335,263 @@ st.markdown(
     "Upload your **Shopify Orders** and **Customers** CSVs, then build any of the reports below."
 )
 
-# ───────── FILE UPLOAD ─────────
+# File Upload Section
 st.markdown("### 📁 Upload Data Files")
 col1, col2 = st.columns(2)
+
 with col1:
-    orders_file = st.file_uploader("Orders CSV", type="csv", help="Upload your Shopify orders export CSV file.")
+    orders_file = st.file_uploader(
+        "Orders CSV", 
+        type="csv",
+        help="Upload your Shopify orders export CSV file. Default: YS Full Orders.csv"
+    )
+
 with col2:
-    customers_file = st.file_uploader("Customers CSV", type="csv", help="Upload your Shopify customers export CSV file.")
+    customers_file = st.file_uploader(
+        "Customers CSV", 
+        type="csv",
+        help="Upload your Shopify customers export CSV file. Default: Customers Full Export.csv"
+    )
 
 if orders_file and customers_file:
+    # keep combined DF
     if "full_combined_df" not in st.session_state:
         orders_file.seek(0)
         customers_file.seek(0)
         st.session_state.full_combined_df = combine(orders_file, customers_file, [])
     full_df: pd.DataFrame = st.session_state.full_combined_df
 
-    # ───────── COMBINED CSV ─────────
-    # (UI unchanged)
-    #  … existing Combined CSV section …
+    # ───────── Combined CSV ────────────────────────────────────────────────
+    st.markdown("## 📋 Combined Order+Customers CSV")
+    st.markdown("""
+    **What this report does:**
+    Combines your orders and customers data into a single CSV file. Each order row includes the matching customer information, and multi-line orders are flattened into a single "Line items" column. Perfect for data analysis in Excel or other tools.
+    """)
+    with st.expander("Generate combined CSV", expanded=False):
+        # Reset file positions for reading columns
+        if hasattr(orders_file, 'seek'):
+            orders_file.seek(0)
+        if hasattr(customers_file, 'seek'):
+            customers_file.seek(0)
+        orders_cols = pd.read_csv(orders_file, nrows=1, dtype=str).columns.tolist()
+        customers_cols = pd.read_csv(customers_file, nrows=1, dtype=str).columns.tolist()
+        all_cols = list(dict.fromkeys(orders_cols + customers_cols + ["Line items"]))
 
-    # ───────── LTV FORM ─────────
-    # (minor wording tweaks only – logic untouched)
+        default_cols = {
+            "Name",
+            "Email",
+            "Created at",
+            "Subtotal",
+            "Total",
+            "Discount Amount",
+            "Tags",
+            "Line items",
+            "Customer ID",
+            "First Name",
+            "Last Name",
+            "Total Spent",
+            "Total Orders",
+            "Tags_cust",
+        }
 
-    # ───────── PURCHASES FORM (clean layout) ─────────
+        sel = st.multiselect(
+            "Columns to include in combined CSV",
+            all_cols,
+            default=[c for c in all_cols if c in default_cols],
+            help="Select which columns to include in the combined CSV download."
+        )
+
+        if st.button("Download combined CSV"):
+            # Reset file positions for combining
+            if hasattr(orders_file, 'seek'):
+                orders_file.seek(0)
+            if hasattr(customers_file, 'seek'):
+                customers_file.seek(0)
+            combined = combine(orders_file, customers_file, sel)
+            st.download_button(
+                f"⬇️ Download {len(combined):,}‑row CSV",
+                combined.to_csv(index=False).encode(),
+                "combined_orders_customers.csv",
+                "text/csv",
+            )
+
+    # ───────── LTV reports ────────────────────────────────────────────────
+    st.markdown("## 📈 Average Lifetime Value (LTV) Reports")
+    st.markdown("""
+    **What this report does:**
+    Calculates the average lifetime value (LTV) of your customers based on their order history. You can filter by order date, customer tags, and line-item text. Useful for understanding customer value and segmentation.
+    """)
+    if "ltv_reports" not in st.session_state:
+        st.session_state.ltv_reports = {}
+
+    with st.expander("➕ Create LTV report", expanded=False):
+        with st.form("ltv_form"):
+            st.markdown("#### Report Name")
+            name = st.text_input("Name for this LTV report", "LTV Report")
+            st.markdown(":grey[Give your report a descriptive name.]")
+
+            st.markdown("---")
+            st.markdown("#### Order Date Filters")
+            st.markdown("""
+            **Order date ranges to include:**  
+            Enter one or more date ranges in the format YYYY-MM-DD to YYYY-MM-DD, separated by semicolons.<br>
+            Example: `2023-01-01 to 2023-12-31;2024-01-01 to 2024-06-30`
+            """, unsafe_allow_html=True)
+            order_date_raw = st.text_input("Order date ranges to include", "")
+
+            st.markdown("---")
+            st.markdown("#### Customer Filters")
+            st.markdown("""
+            **Customer date filters:**  
+            - *Include customers* who placed orders in these date ranges:
+            """)
+            inc_raw = st.text_input("Customer include date ranges", "")
+            st.markdown(":grey[Same format as above. Leave blank to include all.]")
+            st.markdown("*Exclude customers* who placed orders in these date ranges:")
+            exc_raw = st.text_input("Customer exclude date ranges", "")
+            st.markdown(":grey[Same format as above. Leave blank to exclude none.]")
+
+            st.markdown("**Customer line-item filters:**  ")
+            st.markdown("Only include customers who purchased items containing these keywords (comma-separated):")
+            inc_texts_raw = st.text_input("Customer include line-item keywords", "")
+            st.markdown(":grey[Example: Chardonnay, Pinot Noir]")
+            st.markdown("Exclude customers who purchased items containing these keywords (comma-separated):")
+            exc_texts_raw = st.text_input("Customer exclude line-item keywords", "")
+            st.markdown(":grey[Example: Gift Card, Membership]")
+
+            st.markdown("**Customer tag filters:**  ")
+            st.markdown("Only include customers with these tags (comma-separated):")
+            tag_inc_raw = st.text_input("Customer tags to include", "")
+            st.markdown(":grey[Example: VIP, Club]")
+            st.markdown("Exclude customers with these tags (comma-separated):")
+            tag_exc_raw = st.text_input("Customer tags to exclude", "")
+            st.markdown(":grey[Example: Wholesale]")
+
+            st.markdown("---")
+            st.markdown("#### Order Line-Item Exclusions")
+            st.markdown("Exclude orders containing these keywords in any line item (comma-separated):")
+            li_exc_raw = st.text_input("Order line-item keywords to exclude", "membership, bottle box")
+            st.markdown(":grey[Example: Membership, Bottle Box]")
+
+            excl_zero = st.checkbox(
+                "Exclude $0 orders",
+                value=True,
+                help=None
+            )
+            st.markdown(":grey[Exclude orders where the total or subtotal is $0.]")
+
+            if st.form_submit_button("Add LTV report"):
+                try:
+                    filters = {
+                        "order_date_ranges": _parse_date_ranges(order_date_raw),
+                        "include_ranges": _parse_date_ranges(inc_raw),
+                        "exclude_ranges": _parse_date_ranges(exc_raw),
+                        "inc_texts": [t.strip() for t in inc_texts_raw.split(",") if t.strip()],
+                        "exc_texts": [t.strip() for t in exc_texts_raw.split(",") if t.strip()],
+                        "tag_includes": [t.strip() for t in tag_inc_raw.split(",") if t.strip()],
+                        "tag_excludes": [t.strip() for t in tag_exc_raw.split(",") if t.strip()],
+                        "lineitem_excludes": [t.strip() for t in li_exc_raw.split(",") if t.strip()],
+                        "exclude_zero_orders": excl_zero,
+                    }
+                    df_rep, summ = generate_ltv_report(full_df, filters)
+                    rid = uuid.uuid4().hex[:8]
+                    st.session_state.ltv_reports[rid] = {"df": df_rep, "summary": summ, "name": name}
+                    st.success(f"Added **{name}**")
+                except Exception as e:
+                    st.error(e)
+
+    # Collect delete button presses for LTV reports
+    ltv_to_delete = []
+    for rid, rep in list(st.session_state.ltv_reports.items()):
+        with st.expander(f"📄 {rep['name']}"):
+            st.dataframe(rep["df"])
+            st.download_button(
+                "⬇️ Download CSV",
+                rep["df"].to_csv(index=False).encode(),
+                f"{rep['name'].replace(' ', '_').lower()}.csv",
+                "text/csv",
+                key=f"dl_ltv_{rid}",
+            )
+
+            s = rep["summary"]
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Purchase Freq", f"{s['Purchase Frequency']:.3f}")
+            c2.metric("Avg Subt AOV", f"${s['Subtotal AOV']:.2f}")
+            c3.metric("Avg Ord AOV", f"${s['Order Total AOV']:.2f}")
+            c4.metric("Avg Gross AOV", f"${s['Gross Total AOV']:.2f}")
+
+            d1, d2, d3 = st.columns(3)
+            d1.metric("Subtotal LTV", f"${s['Subtotal LTV']:.2f}")
+            d2.metric("Order LTV", f"${s['Order LTV']:.2f}")
+            d3.metric("Gross LTV", f"${s['Gross LTV']:.2f}")
+
+            if st.button("🗑️ Delete", key=f"rm_ltv_{rid}"):
+                ltv_to_delete.append(rid)
+
+    # ───────── Purchases reports (NEW) ─────────────────────────────────────
+    st.markdown("## 🛒 Purchases Reports")
+    st.markdown("""
+    **What this report does:**
+    Shows customer purchase activity, including total orders, spend, and average order value. You can filter by customer and order criteria. Useful for understanding customer engagement and sales performance.
+    """)
     if "purch_reports" not in st.session_state:
         st.session_state.purch_reports = {}
 
     with st.expander("➕ Create Purchases report", expanded=False):
         with st.form("purch_form"):
-            st.subheader("1 · Report name")
-            name = st.text_input("Friendly name", "Purchases Report")
+            st.markdown("#### Report Name")
+            name = st.text_input("Name for this Purchases report", "Purchases Report")
+            st.markdown(":grey[Give your report a descriptive name.]")
 
-            st.divider()
-            st.subheader("2 · Customer‑level filters (ALL must match)")
-            st.markdown("*Orders are analysed **only** if their customer matches **all** of the following.*")
+            st.markdown("---")
+            st.markdown("#### Customer Filters")
+            st.markdown("**Customer date filters:**  ")
+            st.markdown("*Include customers* who placed orders in these date ranges:")
+            ci_date = st.text_input("Customer include date ranges", "")
+            st.markdown(":grey[Format: YYYY-MM-DD to YYYY-MM-DD; separate multiple ranges with semicolons.]")
+            st.markdown("*Exclude customers* who placed orders in these date ranges:")
+            ce_date = st.text_input("Customer exclude date ranges", "")
+            st.markdown(":grey[Format: YYYY-MM-DD to YYYY-MM-DD; separate multiple ranges with semicolons.]")
 
-            c1, c2 = st.columns(2)
-            with c1:
-                ci_date = st.text_input("Include customers – date ranges")
-                ci_txt = st.text_input("Include – line‑item keywords")
-            with c2:
-                ce_date = st.text_input("Exclude customers – date ranges")
-                ce_txt = st.text_input("Exclude – line‑item keywords")
+            st.markdown("**Customer line-item filters:**  ")
+            st.markdown("Only include customers who purchased items containing these keywords (comma-separated):")
+            ci_txt = st.text_input("Customer include line-item keywords", "")
+            st.markdown(":grey[Example: Chardonnay, Pinot Noir]")
+            st.markdown("Exclude customers who purchased items containing these keywords (comma-separated):")
+            ce_txt = st.text_input("Customer exclude line-item keywords", "")
+            st.markdown(":grey[Example: Gift Card, Membership]")
 
-            tag_inc = st.text_input("Include customer TAGS (comma‑sep)")
-            tag_exc = st.text_input("Exclude customer TAGS (comma‑sep)")
+            st.markdown("**Customer tag filters:**  ")
+            st.markdown("Only include customers with these tags (comma-separated):")
+            tag_inc = st.text_input("Customer tags to include", "")
+            st.markdown(":grey[Example: VIP, Club]")
+            st.markdown("Exclude customers with these tags (comma-separated):")
+            tag_exc = st.text_input("Customer tags to exclude", "")
+            st.markdown(":grey[Example: Wholesale]")
 
-            st.divider()
-            st.subheader("3 · Order‑level filters (applied AFTER customer filters)")
+            st.markdown("---")
+            st.markdown("#### Order Filters")
+            st.markdown("**Order date filters:**  ")
+            st.markdown("*Include orders* in these date ranges:")
+            oi_date = st.text_input("Order include date ranges", "")
+            st.markdown(":grey[Format: YYYY-MM-DD to YYYY-MM-DD; separate multiple ranges with semicolons.]")
+            st.markdown("*Exclude orders* in these date ranges:")
+            oe_date = st.text_input("Order exclude date ranges", "")
+            st.markdown(":grey[Format: YYYY-MM-DD to YYYY-MM-DD; separate multiple ranges with semicolons.]")
 
-            o1, o2 = st.columns(2)
-            with o1:
-                oi_date = st.text_input("Include orders – date ranges")
-                oi_li_exc = st.text_input("Exclude orders – line‑item keywords")
-            with o2:
-                oe_date = st.text_input("Exclude orders – date ranges")
-                excl_0 = st.checkbox("Exclude $0 orders", True)
+            st.markdown("**Order line-item exclusions:**  ")
+            st.markdown("Exclude orders containing these keywords in any line item (comma-separated):")
+            oi_li_exc = st.text_input("Order line-item keywords to exclude", "")
+            st.markdown(":grey[Example: Membership, Bottle Box]")
 
-            if st.form_submit_button("Add Purchases report", type="primary"):
+            excl_0 = st.checkbox(
+                "Exclude $0 orders",
+                value=True,
+                help=None
+            )
+            st.markdown(":grey[Exclude orders where the total or subtotal is $0.]")
+
+            if st.form_submit_button("Add Purchases report"):
                 try:
                     filt = {
                         "cust_inc_ranges": _parse_date_ranges(ci_date),
@@ -403,16 +605,14 @@ if orders_file and customers_file:
                         "tag_excludes": [t.strip() for t in tag_exc.split(",") if t.strip()],
                         "exclude_zero_orders": excl_0,
                     }
-                    rep_df, summ = generate_purchases_report(full_df, filt)
+                    df_r, summ = generate_purchases_report(full_df, filt)
                     rid = uuid.uuid4().hex[:8]
-                    st.session_state.purch_reports[rid] = {"df": rep_df, "summary": summ, "name": name}
+                    st.session_state.purch_reports[rid] = {"df": df_r, "summary": summ, "name": name}
                     st.success(f"Added **{name}**")
                 except Exception as e:
                     st.error(e)
 
-    # ───────── RENDER PURCHASES REPORTS ─────────
-    # (UI unchanged except delete rerun)
-
+    # Collect delete button presses for Purchases reports
     purch_to_delete = []
     for rid, rep in list(st.session_state.purch_reports.items()):
         with st.expander(f"📄 {rep['name']}"):
@@ -439,9 +639,13 @@ if orders_file and customers_file:
             if st.button("🗑️ Delete", key=f"rm_p_{rid}"):
                 purch_to_delete.append(rid)
 
-    # ───────── HANDLE DELETE & RERUN ─────────
+    # After rendering all expanders, pop the flagged reports in one batch
+    rerun_needed = False
+    for rid in ltv_to_delete:
+        st.session_state.ltv_reports.pop(rid, None)
+        rerun_needed = True
     for rid in purch_to_delete:
         st.session_state.purch_reports.pop(rid, None)
-    # (same for LTV delete list if used earlier)
-    if purch_to_delete:
-        st.rerun()
+        rerun_needed = True
+    if rerun_needed:
+        st.experimental_rerun()
