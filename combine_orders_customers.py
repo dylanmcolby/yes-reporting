@@ -250,7 +250,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.title("🛠️ Order + Customer CSV Combiner")
+st.title("🍷 YES Society Order Reports")
 
 st.markdown(
     "Upload your **Shopify Orders** and **Customers** CSVs.  \n\n"
