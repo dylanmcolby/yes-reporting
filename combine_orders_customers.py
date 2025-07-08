@@ -372,7 +372,7 @@ if orders_file and customers_file:
     full_df: pd.DataFrame = st.session_state.full_combined_df
 
     # ───────── Combined CSV ────────────────────────────────────────────────
-    st.markdown("## �� Combined CSV")
+    st.markdown("## 📋 Combined Order+Customers CSV")
     st.markdown("""
     **What this report does:**
     Combines your orders and customers data into a single CSV file. Each order row includes the matching customer information, and multi-line orders are flattened into a single "Line items" column. Perfect for data analysis in Excel or other tools.
@@ -499,6 +499,8 @@ if orders_file and customers_file:
                 except Exception as e:
                     st.error(e)
 
+    # Collect delete button presses for LTV reports
+    ltv_to_delete = []
     for rid, rep in list(st.session_state.ltv_reports.items()):
         with st.expander(f"📄 {rep['name']}"):
             st.dataframe(rep["df"])
@@ -523,8 +525,7 @@ if orders_file and customers_file:
             d3.metric("Gross LTV", f"${s['Gross LTV']:.2f}")
 
             if st.button("🗑️ Delete", key=f"rm_ltv_{rid}"):
-                st.session_state.ltv_reports.pop(rid)
-                st.experimental_rerun()
+                ltv_to_delete.append(rid)
 
     # ───────── Purchases reports (NEW) ─────────────────────────────────────
     st.markdown("## 🛒 Purchases Reports")
@@ -607,6 +608,8 @@ if orders_file and customers_file:
                 except Exception as e:
                     st.error(e)
 
+    # Collect delete button presses for Purchases reports
+    purch_to_delete = []
     for rid, rep in list(st.session_state.purch_reports.items()):
         with st.expander(f"📄 {rep['name']}"):
             st.dataframe(rep["df"])
@@ -630,5 +633,15 @@ if orders_file and customers_file:
             b3.metric("Avg Order AOV", f"${s['Avg Order AOV']:.2f}")
 
             if st.button("🗑️ Delete", key=f"rm_p_{rid}"):
-                st.session_state.purch_reports.pop(rid)
-                st.experimental_rerun()
+                purch_to_delete.append(rid)
+
+    # After rendering all expanders, pop the flagged reports in one batch
+    rerun_needed = False
+    for rid in ltv_to_delete:
+        st.session_state.ltv_reports.pop(rid, None)
+        rerun_needed = True
+    for rid in purch_to_delete:
+        st.session_state.purch_reports.pop(rid, None)
+        rerun_needed = True
+    if rerun_needed:
+        st.experimental_rerun()
