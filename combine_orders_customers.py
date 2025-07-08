@@ -5,11 +5,11 @@
 # 1. Lets you upload an **Orders** CSV and a **Customers** CSV.
 # 2. Flattens multi‑line‑item orders into a single row with a
 #    "Line items" column:
-#       Line item name (SKU - $00.00), Line item name 2 (SKU - $00.00)
+#       Line item name (SKU - $00.00), Line item name 2 (SKU - $00.00)
 # 3. Appends the matching customer record (by e‑mail, case‑insensitive) to each
 #    order row.
 # 4. Provides multiple downloadable reports:
-#       • **Combined Order + Customer CSV** (column‑picker)  
+#       • **Combined Order + Customer CSV** (column‑picker)  
 #       • **Average Lifetime Value (LTV)** reports with flexible customer filters.
 
 from __future__ import annotations
@@ -250,7 +250,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.title("🍷 YES Society Order Reports")
+st.title("🍷 YES Society Order Reports")
 
 st.markdown(
     "Upload your **Shopify Orders** and **Customers** CSVs.  \n\n"
@@ -258,48 +258,8 @@ st.markdown(
     "• **LTV reports** – analyse customer value with flexible filters."
 )
 
-# Initialize session state for file persistence
-if "orders_file_data" not in st.session_state:
-    st.session_state.orders_file_data = None
-if "customers_file_data" not in st.session_state:
-    st.session_state.customers_file_data = None
-if "orders_file_name" not in st.session_state:
-    st.session_state.orders_file_name = None
-if "customers_file_name" not in st.session_state:
-    st.session_state.customers_file_name = None
-
-# File uploaders with persistence
-orders_file = st.file_uploader("Orders CSV", type="csv", key="orders_uploader")
-customers_file = st.file_uploader("Customers CSV", type="csv", key="customers_uploader")
-
-# Store uploaded files in session state
-if orders_file is not None:
-    st.session_state.orders_file_data = orders_file.read()
-    st.session_state.orders_file_name = orders_file.name
-    orders_file = BytesIO(st.session_state.orders_file_data)
-elif st.session_state.orders_file_data is not None:
-    # Recreate file object from stored data
-    orders_file = BytesIO(st.session_state.orders_file_data)
-    st.success(f"📁 Orders file loaded: {st.session_state.orders_file_name}")
-
-if customers_file is not None:
-    st.session_state.customers_file_data = customers_file.read()
-    st.session_state.customers_file_name = customers_file.name
-    customers_file = BytesIO(st.session_state.customers_file_data)
-elif st.session_state.customers_file_data is not None:
-    # Recreate file object from stored data
-    customers_file = BytesIO(st.session_state.customers_file_data)
-    st.success(f"📁 Customers file loaded: {st.session_state.customers_file_name}")
-
-# Clear files button
-if st.session_state.orders_file_data is not None or st.session_state.customers_file_data is not None:
-    if st.button("🗑️ Clear uploaded files"):
-        st.session_state.orders_file_data = None
-        st.session_state.customers_file_data = None
-        st.session_state.orders_file_name = None
-        st.session_state.customers_file_name = None
-        st.session_state.full_combined_df = None
-        st.experimental_rerun()
+orders_file = st.file_uploader("Orders CSV", type="csv")
+customers_file = st.file_uploader("Customers CSV", type="csv")
 
 if orders_file and customers_file:
     # keep un‑filtered combined DF in session
@@ -310,9 +270,9 @@ if orders_file and customers_file:
 
     full_df: pd.DataFrame = st.session_state.full_combined_df
 
-    # ────────── Part A – Combined CSV ──────────────────────────────────────
+    # ────────── Part A – Combined CSV ──────────────────────────────────────
     st.markdown("---")
-    st.subheader("📋 Combined CSV")
+    st.subheader("📋 Combined CSV")
 
     try:
         orders_file.seek(0)
@@ -356,21 +316,21 @@ if orders_file and customers_file:
             customers_file.seek(0)
             combined_df = combine(orders_file, customers_file, sel)
             st.download_button(
-                f"⬇️ Download {len(combined_df):,}‑row CSV",
+                f"⬇️ Download {len(combined_df):,}‑row CSV",
                 combined_df.to_csv(index=False).encode(),
                 "combined_orders_customers.csv",
                 "text/csv",
             )
             st.success("Combined CSV ready!")
 
-    # ────────── Part B – LTV reports ───────────────────────────────────────
+    # ────────── Part B – LTV reports ───────────────────────────────────────
     st.markdown("---")
-    st.subheader("📈 Average Lifetime Value (LTV) Reports")
+    st.subheader("📈 Average Lifetime Value (LTV) Reports")
 
     if "ltv_reports" not in st.session_state:
         st.session_state.ltv_reports = {}
 
-    with st.expander("➕ Create a new LTV report", expanded=False):
+    with st.expander("➕ Create a new LTV report", expanded=False):
         with st.form("ltv_form"):
             name = st.text_input("Report name", "LTV Report")
 
@@ -412,10 +372,10 @@ if orders_file and customers_file:
     for rid, r in list(st.session_state.ltv_reports.items()):
         col1, col2 = st.columns([8, 1])
         with col1:
-            with st.expander(f"📄 {r['name']}"):
+            with st.expander(f"📄 {r['name']}"):
                 st.dataframe(r["df"])
                 st.download_button(
-                    "⬇️ Download CSV",
+                    "⬇️ Download CSV",
                     r["df"].to_csv(index=False).encode(),
                     f"{r['name'].replace(' ', '_').lower()}.csv",
                     "text/csv",
@@ -423,24 +383,24 @@ if orders_file and customers_file:
                 )
 
                 s = r["summary"]
-                # ─ metrics row 1 ─
+                # ─ metrics row 1 ─
                 c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Purchase Frequency", f"{s['Purchase Frequency']:.3f}")
+                c1.metric("Purchase Frequency", f"{s['Purchase Frequency']:.3f}")
                 c1.caption("Orders per customer in selected period")
-                c2.metric("Avg Subtotal AOV", f"${s['Subtotal AOV']:.2f}")
+                c2.metric("Avg Subtotal AOV", f"${s['Subtotal AOV']:.2f}")
                 c2.caption("Pre‑discount (excl. tax+shipping) avg order value")
-                c3.metric("Avg Order AOV", f"${s['Order Total AOV']:.2f}")
+                c3.metric("Avg Order AOV", f"${s['Order Total AOV']:.2f}")
                 c3.caption("Post‑discount order value")
-                c4.metric("Avg Gross AOV", f"${s['Gross Total AOV']:.2f}")
+                c4.metric("Avg Gross AOV", f"${s['Gross Total AOV']:.2f}")
                 c4.caption("Order total excluding discounts")
 
-                # ─ metrics row 2 ─
+                # ─ metrics row 2 ─
                 d1, d2, d3 = st.columns(3)
-                d1.metric("Subtotal LTV", f"${s['Subtotal LTV']:.2f}")
+                d1.metric("Subtotal LTV", f"${s['Subtotal LTV']:.2f}")
                 d1.caption("Customer value using subtotal AOV")
-                d2.metric("Order LTV", f"${s['Order LTV']:.2f}")
+                d2.metric("Order LTV", f"${s['Order LTV']:.2f}")
                 d2.caption("Customer value using order AOV")
-                d3.metric("Gross LTV", f"${s['Gross LTV']:.2f}")
+                d3.metric("Gross LTV", f"${s['Gross LTV']:.2f}")
                 d3.caption("Customer value using gross AOV")
         with col2:
             if st.button("🗑️", key=f"rm_{rid}"):
