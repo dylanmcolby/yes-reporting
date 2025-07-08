@@ -436,48 +436,59 @@ if orders_file and customers_file:
 
     with st.expander("➕ Create LTV report", expanded=False):
         with st.form("ltv_form"):
-            st.markdown("#### Report Details")
-            name = st.text_input("Report name", "LTV Report", help="Name for this LTV report.")
+            st.markdown("#### Report Name")
+            name = st.text_input("Name for this LTV report", "LTV Report")
+            st.markdown(":grey[Give your report a descriptive name.]")
 
-            st.markdown("#### Order Filters")
-            order_date_raw = st.text_input(
-                "Order date include (ranges)", "",
-                help="Date ranges for orders to include, e.g. 2023-01-01 to 2023-12-31;2024-01-01 to 2024-06-30"
-            )
+            st.markdown("---")
+            st.markdown("#### Order Date Filters")
+            st.markdown("""
+            **Order date ranges to include:**  
+            Enter one or more date ranges in the format `YYYY-MM-DD to YYYY-MM-DD`, separated by semicolons.<br>
+            Example: `2023-01-01 to 2023-12-31;2024-01-01 to 2024-06-30`
+            """, unsafe_allow_html=True)
+            order_date_raw = st.text_input("Order date ranges to include", "")
 
+            st.markdown("---")
             st.markdown("#### Customer Filters")
-            inc_raw = st.text_input(
-                "Customer include date ranges", "",
-                help="Date ranges for including customers based on their order dates."
-            )
-            exc_raw = st.text_input(
-                "Customer exclude date ranges", "",
-                help="Date ranges for excluding customers based on their order dates."
-            )
-            inc_texts_raw = st.text_input(
-                "Customer include line‑item texts", "",
-                help="Comma-separated keywords. Only include customers who purchased items containing these texts."
-            )
-            exc_texts_raw = st.text_input(
-                "Customer exclude line‑item texts", "",
-                help="Comma-separated keywords. Exclude customers who purchased items containing these texts."
-            )
-            tag_inc_raw = st.text_input(
-                "Customer tags include", "",
-                help="Comma-separated tags. Only include customers with these tags."
-            )
-            tag_exc_raw = st.text_input(
-                "Customer tags exclude", "",
-                help="Comma-separated tags. Exclude customers with these tags."
-            )
-            li_exc_raw = st.text_input(
-                "Exclude orders with line‑item texts", "membership, bottle box",
-                help="Comma-separated keywords. Exclude orders containing these texts."
-            )
+            st.markdown("""
+            **Customer date filters:**  
+            - *Include customers* who placed orders in these date ranges:
+            """)
+            inc_raw = st.text_input("Customer include date ranges", "")
+            st.markdown(":grey[Same format as above. Leave blank to include all.]")
+            st.markdown("- *Exclude customers* who placed orders in these date ranges:")
+            exc_raw = st.text_input("Customer exclude date ranges", "")
+            st.markdown(":grey[Same format as above. Leave blank to exclude none.]")
+
+            st.markdown("**Customer line-item filters:**  ")
+            st.markdown("- Only include customers who purchased items containing these keywords (comma-separated):")
+            inc_texts_raw = st.text_input("Customer include line-item keywords", "")
+            st.markdown(":grey[Example: Chardonnay, Pinot Noir]")
+            st.markdown("- Exclude customers who purchased items containing these keywords (comma-separated):")
+            exc_texts_raw = st.text_input("Customer exclude line-item keywords", "")
+            st.markdown(":grey[Example: Gift Card, Membership]")
+
+            st.markdown("**Customer tag filters:**  ")
+            st.markdown("- Only include customers with these tags (comma-separated):")
+            tag_inc_raw = st.text_input("Customer tags to include", "")
+            st.markdown(":grey[Example: VIP, Club]")
+            st.markdown("- Exclude customers with these tags (comma-separated):")
+            tag_exc_raw = st.text_input("Customer tags to exclude", "")
+            st.markdown(":grey[Example: Wholesale]")
+
+            st.markdown("---")
+            st.markdown("#### Order Line-Item Exclusions")
+            st.markdown("Exclude orders containing these keywords in any line item (comma-separated):")
+            li_exc_raw = st.text_input("Order line-item keywords to exclude", "membership, bottle box")
+            st.markdown(":grey[Example: Membership, Bottle Box]")
+
             excl_zero = st.checkbox(
-                "Exclude $0 orders", value=True,
-                help="Exclude orders where the total or subtotal is $0."
+                "Exclude $0 orders",
+                value=True,
+                help=None
             )
+            st.markdown(":grey[Exclude orders where the total or subtotal is $0.]")
 
             if st.form_submit_button("Add LTV report"):
                 try:
@@ -538,54 +549,57 @@ if orders_file and customers_file:
 
     with st.expander("➕ Create Purchases report", expanded=False):
         with st.form("purch_form"):
-            st.markdown("#### Report Details")
-            name = st.text_input("Report name", "Purchases Report", help="Name for this Purchases report.")
+            st.markdown("#### Report Name")
+            name = st.text_input("Name for this Purchases report", "Purchases Report")
+            st.markdown(":grey[Give your report a descriptive name.]")
 
-            st.markdown("#### Customer Filters (Include / Exclude)")
-            ci_date = st.text_input(
-                "Customer INCLUDE date ranges", "",
-                help="Date ranges for including customers based on their order dates."
-            )
-            ci_txt = st.text_input(
-                "Customer INCLUDE line‑item texts", "",
-                help="Comma-separated keywords. Only include customers who purchased items containing these texts."
-            )
-            ce_date = st.text_input(
-                "Customer EXCLUDE date ranges", "",
-                help="Date ranges for excluding customers based on their order dates."
-            )
-            ce_txt = st.text_input(
-                "Customer EXCLUDE line‑item texts", "",
-                help="Comma-separated keywords. Exclude customers who purchased items containing these texts."
-            )
+            st.markdown("---")
+            st.markdown("#### Customer Filters")
+            st.markdown("**Customer date filters:**  ")
+            st.markdown("- *Include customers* who placed orders in these date ranges:")
+            ci_date = st.text_input("Customer include date ranges", "")
+            st.markdown(":grey[Format: YYYY-MM-DD to YYYY-MM-DD; separate multiple ranges with semicolons.]")
+            st.markdown("- *Exclude customers* who placed orders in these date ranges:")
+            ce_date = st.text_input("Customer exclude date ranges", "")
+            st.markdown(":grey[Format: YYYY-MM-DD to YYYY-MM-DD; separate multiple ranges with semicolons.]")
 
+            st.markdown("**Customer line-item filters:**  ")
+            st.markdown("- Only include customers who purchased items containing these keywords (comma-separated):")
+            ci_txt = st.text_input("Customer include line-item keywords", "")
+            st.markdown(":grey[Example: Chardonnay, Pinot Noir]")
+            st.markdown("- Exclude customers who purchased items containing these keywords (comma-separated):")
+            ce_txt = st.text_input("Customer exclude line-item keywords", "")
+            st.markdown(":grey[Example: Gift Card, Membership]")
+
+            st.markdown("**Customer tag filters:**  ")
+            st.markdown("- Only include customers with these tags (comma-separated):")
+            tag_inc = st.text_input("Customer tags to include", "")
+            st.markdown(":grey[Example: VIP, Club]")
+            st.markdown("- Exclude customers with these tags (comma-separated):")
+            tag_exc = st.text_input("Customer tags to exclude", "")
+            st.markdown(":grey[Example: Wholesale]")
+
+            st.markdown("---")
             st.markdown("#### Order Filters")
-            oi_date = st.text_input(
-                "Order INCLUDE date ranges", "",
-                help="Date ranges for orders to include, e.g. 2023-01-01 to 2023-12-31;2024-01-01 to 2024-06-30"
-            )
-            oe_date = st.text_input(
-                "Order EXCLUDE date ranges", "",
-                help="Date ranges for orders to exclude."
-            )
-            oi_li_exc = st.text_input(
-                "Exclude orders with line‑item texts", "",
-                help="Comma-separated keywords. Exclude orders containing these texts."
-            )
+            st.markdown("**Order date filters:**  ")
+            st.markdown("- *Include orders* in these date ranges:")
+            oi_date = st.text_input("Order include date ranges", "")
+            st.markdown(":grey[Format: YYYY-MM-DD to YYYY-MM-DD; separate multiple ranges with semicolons.]")
+            st.markdown("- *Exclude orders* in these date ranges:")
+            oe_date = st.text_input("Order exclude date ranges", "")
+            st.markdown(":grey[Format: YYYY-MM-DD to YYYY-MM-DD; separate multiple ranges with semicolons.]")
 
-            tag_inc = st.text_input(
-                "Customer tags include", "",
-                help="Comma-separated tags. Only include customers with these tags."
-            )
-            tag_exc = st.text_input(
-                "Customer tags exclude", "",
-                help="Comma-separated tags. Exclude customers with these tags."
-            )
+            st.markdown("**Order line-item exclusions:**  ")
+            st.markdown("Exclude orders containing these keywords in any line item (comma-separated):")
+            oi_li_exc = st.text_input("Order line-item keywords to exclude", "")
+            st.markdown(":grey[Example: Membership, Bottle Box]")
 
             excl_0 = st.checkbox(
-                "Exclude $0 orders", value=True,
-                help="Exclude orders where the total or subtotal is $0."
+                "Exclude $0 orders",
+                value=True,
+                help=None
             )
+            st.markdown(":grey[Exclude orders where the total or subtotal is $0.]")
 
             if st.form_submit_button("Add Purchases report"):
                 try:
