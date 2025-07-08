@@ -345,8 +345,23 @@ st.markdown(
     "Upload your **Shopify Orders** and **Customers** CSVs, then build any of the reports below."
 )
 
-orders_file = st.file_uploader("Orders CSV", type="csv")
-customers_file = st.file_uploader("Customers CSV", type="csv")
+# File Upload Section
+st.markdown("### 📁 Upload Data Files")
+col1, col2 = st.columns(2)
+
+with col1:
+    orders_file = st.file_uploader(
+        "Orders CSV", 
+        type="csv",
+        help="Upload your Shopify orders export CSV file. Default: YS Full Orders.csv"
+    )
+
+with col2:
+    customers_file = st.file_uploader(
+        "Customers CSV", 
+        type="csv",
+        help="Upload your Shopify customers export CSV file. Default: Customers Full Export.csv"
+    )
 
 if orders_file and customers_file:
     # keep combined DF
@@ -357,9 +372,17 @@ if orders_file and customers_file:
     full_df: pd.DataFrame = st.session_state.full_combined_df
 
     # ───────── Combined CSV ────────────────────────────────────────────────
-    st.markdown("## 📋 Combined CSV")
+    st.markdown("## �� Combined CSV")
+    st.markdown("""
+    **What this report does:**
+    Combines your orders and customers data into a single CSV file. Each order row includes the matching customer information, and multi-line orders are flattened into a single "Line items" column. Perfect for data analysis in Excel or other tools.
+    """)
     with st.expander("Generate combined CSV", expanded=False):
-        orders_file.seek(0), customers_file.seek(0)
+        # Reset file positions for reading columns
+        if hasattr(orders_file, 'seek'):
+            orders_file.seek(0)
+        if hasattr(customers_file, 'seek'):
+            customers_file.seek(0)
         orders_cols = pd.read_csv(orders_file, nrows=1, dtype=str).columns.tolist()
         customers_cols = pd.read_csv(customers_file, nrows=1, dtype=str).columns.tolist()
         all_cols = list(dict.fromkeys(orders_cols + customers_cols + ["Line items"]))
@@ -385,10 +408,15 @@ if orders_file and customers_file:
             "Columns to include in combined CSV",
             all_cols,
             default=[c for c in all_cols if c in default_cols],
+            help="Select which columns to include in the combined CSV download."
         )
 
         if st.button("Download combined CSV"):
-            orders_file.seek(0), customers_file.seek(0)
+            # Reset file positions for combining
+            if hasattr(orders_file, 'seek'):
+                orders_file.seek(0)
+            if hasattr(customers_file, 'seek'):
+                customers_file.seek(0)
             combined = combine(orders_file, customers_file, sel)
             st.download_button(
                 f"⬇️ Download {len(combined):,}‑row CSV",
@@ -399,26 +427,57 @@ if orders_file and customers_file:
 
     # ───────── LTV reports ────────────────────────────────────────────────
     st.markdown("## 📈 Average Lifetime Value (LTV) Reports")
+    st.markdown("""
+    **What this report does:**
+    Calculates the average lifetime value (LTV) of your customers based on their order history. You can filter by order date, customer tags, and line-item text. Useful for understanding customer value and segmentation.
+    """)
     if "ltv_reports" not in st.session_state:
         st.session_state.ltv_reports = {}
 
     with st.expander("➕ Create LTV report", expanded=False):
         with st.form("ltv_form"):
-            name = st.text_input("Report name", "LTV Report")
+            st.markdown("#### Report Details")
+            name = st.text_input("Report name", "LTV Report", help="Name for this LTV report.")
 
-            order_date_raw = st.text_input("Order date include (ranges)", "")
-            inc_raw = st.text_input("Customer include date ranges", "")
-            exc_raw = st.text_input("Customer exclude date ranges", "")
+            st.markdown("#### Order Filters")
+            order_date_raw = st.text_input(
+                "Order date include (ranges)", "",
+                help="Date ranges for orders to include, e.g. 2023-01-01 to 2023-12-31;2024-01-01 to 2024-06-30"
+            )
 
-            inc_texts_raw = st.text_input("Customer include line‑item texts", "")
-            exc_texts_raw = st.text_input("Customer exclude line‑item texts", "")
-
-            tag_inc_raw = st.text_input("Customer tags include", "")
-            tag_exc_raw = st.text_input("Customer tags exclude", "")
-
-            li_exc_raw = st.text_input("Exclude orders with line‑item texts", "membership")
-
-            excl_zero = st.checkbox("Exclude $0 orders", value=True)
+            st.markdown("#### Customer Filters")
+            inc_raw = st.text_input(
+                "Customer include date ranges", "",
+                help="Date ranges for including customers based on their order dates."
+            )
+            exc_raw = st.text_input(
+                "Customer exclude date ranges", "",
+                help="Date ranges for excluding customers based on their order dates."
+            )
+            inc_texts_raw = st.text_input(
+                "Customer include line‑item texts", "",
+                help="Comma-separated keywords. Only include customers who purchased items containing these texts."
+            )
+            exc_texts_raw = st.text_input(
+                "Customer exclude line‑item texts", "",
+                help="Comma-separated keywords. Exclude customers who purchased items containing these texts."
+            )
+            tag_inc_raw = st.text_input(
+                "Customer tags include", "",
+                help="Comma-separated tags. Only include customers with these tags."
+            )
+            tag_exc_raw = st.text_input(
+                "Customer tags exclude", "",
+                help="Comma-separated tags. Exclude customers with these tags."
+            )
+            li_exc_raw = st.text_input(
+                "Exclude orders with line‑item texts", "membership, bottle box",
+                help="Comma-separated keywords. Exclude orders containing these texts."
+            )
+            excl_zero = st.checkbox(
+                "Exclude $0 orders", value=True,
+                help="Exclude orders where the total or subtotal is $0."
+            )
 
             if st.form_submit_button("Add LTV report"):
                 try:
@@ -469,28 +528,63 @@ if orders_file and customers_file:
 
     # ───────── Purchases reports (NEW) ─────────────────────────────────────
     st.markdown("## 🛒 Purchases Reports")
+    st.markdown("""
+    **What this report does:**
+    Shows customer purchase activity, including total orders, spend, and average order value. You can filter by customer and order criteria. Useful for understanding customer engagement and sales performance.
+    """)
     if "purch_reports" not in st.session_state:
         st.session_state.purch_reports = {}
 
     with st.expander("➕ Create Purchases report", expanded=False):
         with st.form("purch_form"):
-            name = st.text_input("Report name", "Purchases Report")
+            st.markdown("#### Report Details")
+            name = st.text_input("Report name", "Purchases Report", help="Name for this Purchases report.")
 
-            st.markdown("### Customer filters (include / exclude)")
-            ci_date = st.text_input("Customer INCLUDE date ranges", "")
-            ci_txt = st.text_input("Customer INCLUDE line‑item texts", "")
-            ce_date = st.text_input("Customer EXCLUDE date ranges", "")
-            ce_txt = st.text_input("Customer EXCLUDE line‑item texts", "")
+            st.markdown("#### Customer Filters (Include / Exclude)")
+            ci_date = st.text_input(
+                "Customer INCLUDE date ranges", "",
+                help="Date ranges for including customers based on their order dates."
+            )
+            ci_txt = st.text_input(
+                "Customer INCLUDE line‑item texts", "",
+                help="Comma-separated keywords. Only include customers who purchased items containing these texts."
+            )
+            ce_date = st.text_input(
+                "Customer EXCLUDE date ranges", "",
+                help="Date ranges for excluding customers based on their order dates."
+            )
+            ce_txt = st.text_input(
+                "Customer EXCLUDE line‑item texts", "",
+                help="Comma-separated keywords. Exclude customers who purchased items containing these texts."
+            )
 
-            st.markdown("### Order filters")
-            oi_date = st.text_input("Order INCLUDE date ranges", "")
-            oe_date = st.text_input("Order EXCLUDE date ranges", "")
-            oi_li_exc = st.text_input("Exclude orders with line‑item texts", "")
+            st.markdown("#### Order Filters")
+            oi_date = st.text_input(
+                "Order INCLUDE date ranges", "",
+                help="Date ranges for orders to include, e.g. 2023-01-01 to 2023-12-31;2024-01-01 to 2024-06-30"
+            )
+            oe_date = st.text_input(
+                "Order EXCLUDE date ranges", "",
+                help="Date ranges for orders to exclude."
+            )
+            oi_li_exc = st.text_input(
+                "Exclude orders with line‑item texts", "",
+                help="Comma-separated keywords. Exclude orders containing these texts."
+            )
 
-            tag_inc = st.text_input("Customer tags include", "")
-            tag_exc = st.text_input("Customer tags exclude", "")
+            tag_inc = st.text_input(
+                "Customer tags include", "",
+                help="Comma-separated tags. Only include customers with these tags."
+            )
+            tag_exc = st.text_input(
+                "Customer tags exclude", "",
+                help="Comma-separated tags. Exclude customers with these tags."
+            )
 
-            excl_0 = st.checkbox("Exclude $0 orders", value=True)
+            excl_0 = st.checkbox(
+                "Exclude $0 orders", value=True,
+                help="Exclude orders where the total or subtotal is $0."
+            )
 
             if st.form_submit_button("Add Purchases report"):
                 try:
