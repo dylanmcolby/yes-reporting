@@ -296,6 +296,14 @@ if orders_file and customers_file:
         orders_cols = pd.read_csv(orders_file, nrows=1, dtype=str).columns.tolist()
         customers_cols = pd.read_csv(customers_file, nrows=1, dtype=str).columns.tolist()
         all_cols = list(dict.fromkeys(orders_cols + customers_cols + ["Line items"]))
+        
+        # Create display names for columns (rename Tags_cust to Customer Tags)
+        display_cols = []
+        for col in all_cols:
+            if col == "Tags_cust":
+                display_cols.append("Customer Tags")
+            else:
+                display_cols.append(col)
 
         default_cols = {
             "Name",
@@ -311,7 +319,7 @@ if orders_file and customers_file:
             "Last Name",
             "Total Spent",
             "Total Orders",
-            "Tags_cust",
+            "Customer Tags",
         }
 
         sel = st.multiselect(
