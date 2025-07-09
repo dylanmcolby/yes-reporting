@@ -322,12 +322,20 @@ if orders_file and customers_file:
             "Customer Tags",
         }
 
-        sel = st.multiselect(
+        sel_display = st.multiselect(
             "Columns to include in combined CSV",
-            all_cols,
-            default=[c for c in all_cols if c in default_cols],
+            display_cols,
+            default=[c for c in display_cols if c in default_cols],
             help="Select which columns to include in the combined CSV download."
         )
+        
+        # Map display names back to actual column names
+        sel = []
+        for display_col in sel_display:
+            if display_col == "Customer Tags":
+                sel.append("Tags_cust")
+            else:
+                sel.append(display_col)
 
         if st.button("Download combined CSV"):
             # Reset file positions for combining
