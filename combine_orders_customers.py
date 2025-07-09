@@ -178,6 +178,9 @@ def generate_ltv_report(df_orders: pd.DataFrame, filters: Dict) -> Tuple[pd.Data
                 ~df[tag_col].str.lower().fillna("").apply(lambda x: any(t in x for t in exc_tags))
             ]
 
+    # Freeze the valid customer pool after customer-level filters but before order-level filters
+    valid_customers = df["Email"].nunique()
+
     # line‑item exclusion
     li_exc = [t.lower() for t in filters["lineitem_excludes"] if t]
     if li_exc and "Line items" in df.columns:
@@ -212,109 +215,26 @@ def generate_ltv_report(df_orders: pd.DataFrame, filters: Dict) -> Tuple[pd.Data
     report["Order Total AOV"] = report["Order Total Spend"] / report["Total Number of Orders"]
     report["Gross Total AOV"] = report["Gross Total Spend"] / report["Total Number of Orders"]
 
-    purchase_frequency = report["Total Number of Orders"].sum() / len(report)
+    purchase_frequency = report["Total Number of Orders"].sum() / valid_customers
 
     report["Subtotal LTV"] = report["Subtotal AOV"] * purchase_frequency
     report["Order LTV"] = report["Order Total AOV"] * purchase_frequency
     report["Gross LTV"] = report["Gross Total AOV"] * purchase_frequency
+
+    # Calculate customer retention percentage
+    final_customers = report["Customer Email"].nunique()
+    customer_retention_pct = (final_customers / valid_customers * 100) if valid_customers else 0.0
 
     summary: Dict[str, float] = report.mean(numeric_only=True).to_dict()
     summary["Purchase Frequency"] = purchase_frequency
     summary["Subtotal LTV"] = summary["Subtotal AOV"] * purchase_frequency
     summary["Order LTV"] = summary["Order Total AOV"] * purchase_frequency
     summary["Gross LTV"] = summary["Gross Total AOV"] * purchase_frequency
+    summary["Valid Customers"] = valid_customers
+    summary["Final Customers"] = final_customers
+    summary["% Customers Retained"] = customer_retention_pct
 
     return report, summary
-
-
-# ──────────────────── Purchases report generator (updated) ──────────────────
-
-def generate_purchases_report(df_orders: pd.DataFrame, f: Dict) -> Tuple[pd.DataFrame, Dict]:
-    df = df_orders.copy()
-
-    # ───── 1 · CUSTOMER‑LEVEL FILTERS ─────
-    inc_cust = _emails_with_orders(df, f["cust_inc_ranges"], f["cust_inc_texts"])
-    exc_cust = _emails_with_orders(df, f["cust_exc_ranges"], f["cust_exc_texts"])
-    if inc_cust:
-        df = df[df["Email"].isin(inc_cust)]
-    if exc_cust:
-        df = df[~df["Email"].isin(exc_cust)]
-
-    tag_col = "Tags_cust" if "Tags_cust" in df.columns else "Tags"
-    if tag_col in df.columns:
-        tin = [t.lower() for t in f["tag_includes"] if t]
-        tex = [t.lower() for t in f["tag_excludes"] if t]
-        if tin:
-            df = df[df[tag_col].str.lower().fillna("").apply(lambda x: any(t in x for t in tin))]
-        if tex:
-            df = df[~df[tag_col].str.lower().fillna("").apply(lambda x: any(t in x for t in tex))]
-
-    eligible_customers = df["Email"].nunique()
-
-    # ───── 2 · ORDER‑LEVEL FILTERS ─────
-    if f["order_inc_ranges"] or f["order_exc_ranges"]:
-        _attach_created_date(df)
-    if f["order_inc_ranges"] and "_created_at_dt" in df.columns:
-        inc_mask = False
-        for s, e in f["order_inc_ranges"]:
-            inc_mask |= df["_created_at_dt"].between(s, e, inclusive="both")
-        df = df[inc_mask]
-    if f["order_exc_ranges"] and "_created_at_dt" in df.columns:
-        exc_mask = False
-        for s, e in f["order_exc_ranges"]:
-            exc_mask |= df["_created_at_dt"].between(s, e, inclusive="both")
-        df = df[~exc_mask]
-
-    if f["order_li_excludes"] and "Line items" in df.columns:
-        df = df[~df["Line items"].str.lower().fillna("").apply(lambda x: any(t in x for t in f["order_li_excludes"]))]
-
-    # ───── 3 · MONEY CLEANUP & $0 EXCLUSION ─────
-    df["_Subtotal_f"] = df["Subtotal"].apply(_money_to_float)
-    df["_Total_f"] = df["Total"].apply(_money_to_float)
-    df["_Discount_f"] = df["Discount Amount"].apply(_money_to_float)
-    df["_Gross_f"] = df["_Total_f"] + df["_Discount_f"]
-
-    if f["exclude_zero_orders"]:
-        df = df[(df["_Total_f"] > 0) & (df["_Subtotal_f"] > 0)]
-
-    if df.empty:
-        raise ValueError("No data left after applying filters.")
-
-    # ───── 4 · AGGREGATE ─────
-    grp = df.groupby("Email", dropna=False)
-    report = pd.DataFrame(
-        {
-            "Customer Email": grp.size().index,
-            "Total Orders": grp.size().values,
-            "Subtotal Spend": grp["_Subtotal_f"].sum().values,
-            "Order Spend": grp["_Total_f"].sum().values,
-            "Gross Spend": grp["_Gross_f"].sum().values,
-        }
-    )
-    report["Subtotal AOV"] = report["Subtotal Spend"] / report["Total Orders"]
-    report["Order AOV"] = report["Order Spend"] / report["Total Orders"]
-    report["Gross AOV"] = report["Gross Spend"] / report["Total Orders"]
-
-    # ───── 5 · SUMMARY ─────
-    customers_with_orders = report["Customer Email"].nunique()
-    pct_cust_orders = (customers_with_orders / eligible_customers * 100) if eligible_customers else 0
-
-    summary = {
-        "% Customers with ≥1 order": pct_cust_orders,
-        "Avg # Orders / Customer": report["Total Orders"].mean(),
-        "Avg Subtotal AOV": report["Subtotal AOV"].mean(),
-        "Avg Order AOV": report["Order AOV"].mean(),
-        "Avg Gross AOV": report["Gross AOV"].mean(),
-        "Avg Subtotal Spend": report["Subtotal Spend"].mean(),
-        "Avg Order Spend": report["Order Spend"].mean(),
-        "Avg Gross Spend": report["Gross Spend"].mean(),
-        "Total Subtotal Spend": report["Subtotal Spend"].sum(),
-        "Total Order Spend": report["Order Spend"].sum(),
-        "Total Gross Spend": report["Gross Spend"].sum(),
-    }
-
-    return report, summary
-
 
 
 # ─────────────────────────── UI ─────────────────────────────────────────────
@@ -525,127 +445,19 @@ if orders_file and customers_file:
             d2.metric("Order LTV", f"${s['Order LTV']:.2f}")
             d3.metric("Gross LTV", f"${s['Gross LTV']:.2f}")
 
+            # Customer retention metrics
+            e1, e2, e3 = st.columns(3)
+            e1.metric("Valid Customers", f"{s['Valid Customers']:,}")
+            e2.metric("Valid Customers with Valid Orders", f"{s['Final Customers']:,}")
+            e3.metric("% Valid Customers with Valid Orders", f"{s['% Customers Retained']:.1f}%")
+
             if st.button("🗑️ Delete", key=f"rm_ltv_{rid}"):
                 ltv_to_delete.append(rid)
-
-    # ───────── Purchases reports (NEW) ─────────────────────────────────────
-    st.markdown("## 🛒 Purchases Reports")
-    st.markdown("""
-    **What this report does:**
-    Shows customer purchase activity, including total orders, spend, and average order value. You can filter by customer and order criteria. Useful for understanding customer engagement and sales performance.
-    """)
-    if "purch_reports" not in st.session_state:
-        st.session_state.purch_reports = {}
-
-    with st.expander("➕ Create Purchases report", expanded=False):
-        with st.form("purch_form"):
-            st.markdown("#### Report Name")
-            name = st.text_input("Name for this Purchases report", "Purchases Report")
-            st.markdown(":grey[Give your report a descriptive name.]")
-
-            st.markdown("---")
-            st.markdown("#### Customer Filters")
-            st.markdown("**Customer date filters:**  ")
-            st.markdown("*Include customers* who placed orders in these date ranges:")
-            ci_date = st.text_input("Customer include date ranges", "")
-            st.markdown(":grey[Format: YYYY-MM-DD to YYYY-MM-DD; separate multiple ranges with semicolons.]")
-            st.markdown("*Exclude customers* who placed orders in these date ranges:")
-            ce_date = st.text_input("Customer exclude date ranges", "")
-            st.markdown(":grey[Format: YYYY-MM-DD to YYYY-MM-DD; separate multiple ranges with semicolons.]")
-
-            st.markdown("**Customer line-item filters:**  ")
-            st.markdown("Only include customers who purchased items containing these keywords (comma-separated):")
-            ci_txt = st.text_input("Customer include line-item keywords", "")
-            st.markdown(":grey[Example: Chardonnay, Pinot Noir]")
-            st.markdown("Exclude customers who purchased items containing these keywords (comma-separated):")
-            ce_txt = st.text_input("Customer exclude line-item keywords", "")
-            st.markdown(":grey[Example: Gift Card, Membership]")
-
-            st.markdown("**Customer tag filters:**  ")
-            st.markdown("Only include customers with these tags (comma-separated):")
-            tag_inc = st.text_input("Customer tags to include", "")
-            st.markdown(":grey[Example: VIP, Club]")
-            st.markdown("Exclude customers with these tags (comma-separated):")
-            tag_exc = st.text_input("Customer tags to exclude", "")
-            st.markdown(":grey[Example: Wholesale]")
-
-            st.markdown("---")
-            st.markdown("#### Order Filters")
-            st.markdown("**Order date filters:**  ")
-            st.markdown("*Include orders* in these date ranges:")
-            oi_date = st.text_input("Order include date ranges", "")
-            st.markdown(":grey[Format: YYYY-MM-DD to YYYY-MM-DD; separate multiple ranges with semicolons.]")
-            st.markdown("*Exclude orders* in these date ranges:")
-            oe_date = st.text_input("Order exclude date ranges", "")
-            st.markdown(":grey[Format: YYYY-MM-DD to YYYY-MM-DD; separate multiple ranges with semicolons.]")
-
-            st.markdown("**Order line-item exclusions:**  ")
-            st.markdown("Exclude orders containing these keywords in any line item (comma-separated):")
-            oi_li_exc = st.text_input("Order line-item keywords to exclude", "")
-            st.markdown(":grey[Example: Membership, Bottle Box]")
-
-            excl_0 = st.checkbox(
-                "Exclude $0 orders",
-                value=True,
-                help=None
-            )
-            st.markdown(":grey[Exclude orders where the total or subtotal is $0.]")
-
-            if st.form_submit_button("Add Purchases report"):
-                try:
-                    filt = {
-                        "cust_inc_ranges": _parse_date_ranges(ci_date),
-                        "cust_inc_texts": [t.strip() for t in ci_txt.split(",") if t.strip()],
-                        "cust_exc_ranges": _parse_date_ranges(ce_date),
-                        "cust_exc_texts": [t.strip() for t in ce_txt.split(",") if t.strip()],
-                        "order_inc_ranges": _parse_date_ranges(oi_date),
-                        "order_exc_ranges": _parse_date_ranges(oe_date),
-                        "order_li_excludes": [t.strip() for t in oi_li_exc.split(",") if t.strip()],
-                        "tag_includes": [t.strip() for t in tag_inc.split(",") if t.strip()],
-                        "tag_excludes": [t.strip() for t in tag_exc.split(",") if t.strip()],
-                        "exclude_zero_orders": excl_0,
-                    }
-                    df_r, summ = generate_purchases_report(full_df, filt)
-                    rid = uuid.uuid4().hex[:8]
-                    st.session_state.purch_reports[rid] = {"df": df_r, "summary": summ, "name": name}
-                    st.success(f"Added **{name}**")
-                except Exception as e:
-                    st.error(e)
-
-    # Collect delete button presses for Purchases reports
-    purch_to_delete = []
-    for rid, rep in list(st.session_state.purch_reports.items()):
-        with st.expander(f"📄 {rep['name']}"):
-            st.dataframe(rep["df"])
-            st.download_button(
-                "⬇️ Download CSV",
-                rep["df"].to_csv(index=False).encode(),
-                f"{rep['name'].replace(' ', '_').lower()}.csv",
-                "text/csv",
-                key=f"dl_purch_{rid}",
-            )
-
-            s = rep["summary"]
-            a1, a2, a3 = st.columns(3)
-            a1.metric("% Cust w/ Orders", f"{s['% Customers with ≥1 order']:.1f}%")
-            a2.metric("Avg # Orders", f"{s['Avg # Orders / Customer']:.2f}")
-            a3.metric("Avg Gross AOV", f"${s['Avg Gross AOV']:.2f}")
-
-            b1, b2, b3 = st.columns(3)
-            b1.metric("Total Gross Spend", f"${s['Total Gross Spend']:.2f}")
-            b2.metric("Avg Gross Spend / Cust", f"${s['Avg Gross Spend']:.2f}")
-            b3.metric("Avg Order AOV", f"${s['Avg Order AOV']:.2f}")
-
-            if st.button("🗑️ Delete", key=f"rm_p_{rid}"):
-                purch_to_delete.append(rid)
 
     # After rendering all expanders, pop the flagged reports in one batch
     rerun_needed = False
     for rid in ltv_to_delete:
         st.session_state.ltv_reports.pop(rid, None)
-        rerun_needed = True
-    for rid in purch_to_delete:
-        st.session_state.purch_reports.pop(rid, None)
         rerun_needed = True
     if rerun_needed:
         st.experimental_rerun()
