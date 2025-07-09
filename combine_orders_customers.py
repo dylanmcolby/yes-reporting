@@ -288,14 +288,8 @@ if orders_file and customers_file:
     Combines your orders and customers data into a single CSV file. Each order row includes the matching customer information, and multi-line orders are flattened into a single "Line items" column. Perfect for data analysis in Excel or other tools.
     """)
     with st.expander("Generate combined CSV", expanded=False):
-        # Reset file positions for reading columns
-        if hasattr(orders_file, 'seek'):
-            orders_file.seek(0)
-        if hasattr(customers_file, 'seek'):
-            customers_file.seek(0)
-        orders_cols = pd.read_csv(orders_file, nrows=1, dtype=str).columns.tolist()
-        customers_cols = pd.read_csv(customers_file, nrows=1, dtype=str).columns.tolist()
-        all_cols = list(dict.fromkeys(orders_cols + customers_cols + ["Line items"]))
+        # Get actual column names from the combined dataframe
+        all_cols = full_df.columns.tolist()
         
         # Create display names for columns (rename Tags_cust to Customer Tags)
         display_cols = []
